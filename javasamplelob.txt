@@ -1,0 +1,111 @@
+package db;
+
+import java.io.*;
+import java.sql.*;
+import java.nio.charset.*;
+
+public class LobInsert implements Runnable {
+
+    public void run() {
+        throw new UnsupportedOperationException("Not supported yet.");
+    }
+
+    String driverClassName = "com.teradata.jdbc.TeraDriver";
+    String url = "jdbc:teradata://192.168.29.129/DATABASE=JAGAN";
+    String user = "jagan";
+    String password = "jagan";
+
+            /**
+             * The jobFileName points to a text file consisting of 4 columns.
+             * The columns are seperated by commas.
+             * These are:
+             *   * A String containing the ID (name) of the Large Object - this is used in the web example
+             *   * The type of LOB (if it starts with a 'B' then a BLOB anything else is a CLOB)
+             *   * The MIME Type of the LOB - used in the web example
+             *   * A file name pointing to the Large Object
+             *
+             */
+    String jobFileName = "lobjob.txt";
+
+    Connection connection = null;
+
+    /**
+     * @param args the command line arguments
+     */
+    public static void main(String[] args) {
+        try {
+            LobInsert loadLob = new LobInsert ();
+            loadLob.go ();
+        }
+        catch (Exception e) {
+            e.printStackTrace ();
+        }
+    }
+
+    public void go ()
+            throws ClassNotFoundException,
+                IOException, FileNotFoundException {
+
+        BufferedReader jobFile = null;
+
+        try {
+            jobFile = new BufferedReader (new FileReader (jobFileName));
+
+            Class.forName (driverClassName);
+            connection = DriverManager.getConnection(url, user, password);
+
+
+            System.out.println ("Loading Large Objects. Control file: " + jobFileName);
+
+            String sqlText = "insert into jagan.mylobtbl \n" +
+                    "    values (?, ?);";
+            PreparedStatement lobStmt = connection.prepareStatement(sqlText);
+
+            String inLine = null;
+            int lineNo = 0;
+            while ((inLine = jobFile.readLine()) != null) {
+                lineNo++;
+                    // Split the input line into it's component parts.
+                String [] rowParts = inLine.split (",");
+                    
+                String id = rowParts [0];
+                String lobstring = rowParts[1];
+                                
+
+                try {
+                	long lobSize = lobstring.length();
+                	System.out.println(lobSize);
+
+                	lobStmt.setString(1, id);
+                    InputStream lobdata = new ByteArrayInputStream(lobstring.getBytes(Charset.forName("UTF-8")));
+                    lobStmt.setAsciiStream(2, lobdata, (int) lobSize);
+                    
+                    lobStmt.executeUpdate();
+                    lobdata.close();
+                }
+                catch (FileNotFoundException e) {
+                    System.out.println ("File: not found on line: " + lineNo);
+                }
+                catch (IOException e) {
+                    System.out.println ("IOError reading: ");
+                }
+            }
+
+            connection.close ();
+        }
+        catch (SQLException e) {
+            if (connection != null) {
+                try {
+                    connection.close ();
+                }
+                catch (SQLException ex) {
+                }
+            }
+            if (jobFile != null) {
+                jobFile.close ();
+            }
+            System.out.println ("SQLException: " + e.getErrorCode() + " - " + e.getMessage());
+            e.printStackTrace ();
+        }
+    }
+}
